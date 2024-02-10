@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Sorted.Api.Interfaces;
+﻿using Sorted.Api.Interfaces;
 using Sorted.Api.Models;
 using System.Net;
 using System.Text.Json;
