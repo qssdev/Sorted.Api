@@ -1,12 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Sorted.Api.Models;
-using System.Text.Json;
-using Swashbuckle.AspNetCore.Annotations;
-using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
-using System.Net.Mime;
-using System.Net;
 using Sorted.Api.Interfaces;
+using Sorted.Api.Models;
+using System.Net.Http;
+using System.Net.Mime;
 using System.Text.RegularExpressions;
 
 namespace Sorted.Api.Controllers
@@ -19,14 +15,17 @@ namespace Sorted.Api.Controllers
     public class RainfallController : ControllerBase
     {
         private readonly IRainfallRepository repository;
+        private readonly ILogger<RainfallController> _logger;
 
         /// <summary>
-        /// 
+        /// Constructor for rain fall repository
         /// </summary>
-        /// <param name="rainfallRepo"></param>
-        public RainfallController(IRainfallRepository rainfallRepo)
+        /// <param name="rainfallRepo">Rainfall repository to use </param>
+        /// <param name="logger">logger interface to create logging</param>
+        public RainfallController(IRainfallRepository rainfallRepo, ILogger<RainfallController> logger)
         {
             repository = rainfallRepo;
+            _logger = logger;
         }
 
         /// <summary>
@@ -63,6 +62,8 @@ namespace Sorted.Api.Controllers
                     return BadRequest("StationId must consist of alphanumeric characters only");
                 }
 
+                _logger.LogInformation($"request rainfall for stationid: {stationId}", stationId, count);
+
                 var rainFallData = await repository.GetRainFallReadingByStationId(stationId, count);
 
                 if (rainFallData.StatusCode != (int)StatusCodes.Status200OK)
@@ -75,7 +76,7 @@ namespace Sorted.Api.Controllers
             catch (Exception ex)
             {
                 // Log the exception
-                Console.WriteLine($"An error occurred: {ex.Message}");
+                _logger.LogError(ex, "An error occurred while processing the request");
 
                 return StatusCode(500, new ErrorResponse
                 {

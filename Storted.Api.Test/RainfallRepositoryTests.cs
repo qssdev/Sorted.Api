@@ -1,10 +1,7 @@
-using System.Net;
-using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Moq.Protected;
-using Sorted.Api.Models;
 using Sorted.Api.Repositories;
+using System.Net;
 
 namespace Storted.Api.Test
 {
