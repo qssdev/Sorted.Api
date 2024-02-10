@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Sorted.Api\Sorted.Api\Sorted.Api.csproj" />
+    <ProjectReference Include="..\Sorted.Api\Sorted.Api.csproj" />
   </ItemGroup>
 
 </Project>

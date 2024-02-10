@@ -34,6 +34,10 @@ builder.Services.AddScoped<IRainfallRepository, RainfallRepository>();
 
 builder.Services.AddHttpClient();
 
+builder.Services.AddLogging();
+
+builder.Logging.AddConsole();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
