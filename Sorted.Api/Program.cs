@@ -34,6 +34,8 @@ builder.Services.AddScoped<IRainfallRepository, RainfallRepository>();
 
 builder.Services.AddHttpClient();
 
+builder.Services.AddMemoryCache();
+
 builder.Services.AddLogging();
 
 builder.Logging.AddConsole();

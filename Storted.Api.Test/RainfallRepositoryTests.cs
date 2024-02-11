@@ -1,27 +1,21 @@
+using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using Moq.Protected;
+using Sorted.Api.Models;
 using Sorted.Api.Repositories;
+using Sorted.Api.Extensions;
 using System.Net;
 
 namespace Storted.Api.Test
 {
     public class RainfallRepositoryTests
     {
-        [Fact]
-        public async Task GetRainFallReadingByStationId_Success()
+        private void SetupMockObjects(HttpResponseMessage response, out Mock<IHttpClientFactory> mockFactory)
         {
-            // Arrange
-            var mockFactory = new Mock<IHttpClientFactory>();
+            mockFactory = new Mock<IHttpClientFactory>();
             var mockHandler = new Mock<HttpMessageHandler>();
 
-            var stationId = "123";
-            var resultCountMax = 10;
-
             var responseBody = "{\"Readings\": []}";
-            var response = new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(responseBody)
-            };
 
             mockHandler.Protected()
                 .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
@@ -34,8 +28,35 @@ namespace Storted.Api.Test
 
             mockFactory.Setup(_ => _.CreateClient(It.IsAny<string>()))
                        .Returns(httpClient);
+        }
 
-            var repository = new RainfallRepository(mockFactory.Object);
+
+        [Fact]
+        public async Task GetRainFallReadingByStationId_Success()
+        {
+            // Arrange
+            var stationId = "123";
+            var resultCountMax = 10;
+
+            var responseBody = "{\"Readings\": []}";
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseBody)
+            };
+
+            SetupMockObjects(response, out Mock<IHttpClientFactory> mockFactory);
+
+            var mockCache = new Mock<IMemoryCache>();
+            var cachedResult = new RainfallModelMessage(200, new RainfallReadingResponse(), null);
+            mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+                     .Returns(true)
+                     .Callback((object key, out object value) =>
+                     {
+                         value = cachedResult;
+                         TimeSpan.FromMinutes(5);
+                     });
+
+            var repository = new RainfallRepository(mockFactory.Object, mockCache.Object);
 
             // Act
             var result = await repository.GetRainFallReadingByStationId(stationId, resultCountMax);
@@ -51,30 +72,28 @@ namespace Storted.Api.Test
         public async Task GetRainFallReadingByStationId_NotFound()
         {
             // Arrange
-            var mockFactory = new Mock<IHttpClientFactory>();
-            var mockHandler = new Mock<HttpMessageHandler>();
-
-            var stationId = "123";
+            var stationId = "-1";
             var resultCountMax = 10;
 
             var response = new HttpResponseMessage(HttpStatusCode.NotFound);
 
-            mockHandler.Protected()
-                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-                .ReturnsAsync(response);
+            SetupMockObjects(response, out Mock<IHttpClientFactory> mockFactory);
 
-            var httpClient = new HttpClient(mockHandler.Object)
-            {
-                BaseAddress = new Uri("http://localhost:5283")
-            };
+            var mockCache = new Mock<IMemoryCache>();
+            var cachedResult = new RainfallModelMessage(404, new RainfallReadingResponse(), null);
 
-            mockFactory.Setup(_ => _.CreateClient(It.IsAny<string>()))
-                       .Returns(httpClient);
+            mockCache.Setup(x => x.CreateEntry(It.IsAny<object>())).Returns(Mock.Of<ICacheEntry>);
 
-            var repository = new RainfallRepository(mockFactory.Object);
+            mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+                     .Returns(false);
+
+            mockCache.Object.SetCache(stationId, cachedResult, new MemoryCacheEntryOptions { SlidingExpiration = TimeSpan.FromMinutes(5) });
+
+            var repository = new RainfallRepository(mockFactory.Object, mockCache.Object);
 
             // Act
             var result = await repository.GetRainFallReadingByStationId(stationId, resultCountMax);
+
 
             // Assert
             Assert.NotNull(result);
@@ -87,27 +106,25 @@ namespace Storted.Api.Test
         public async Task GetRainFallReadingByStationId_BadRequest()
         {
             // Arrange
-            var mockFactory = new Mock<IHttpClientFactory>();
-            var mockHandler = new Mock<HttpMessageHandler>();
-
             var stationId = "123";
             var resultCountMax = 10;
 
             var response = new HttpResponseMessage(HttpStatusCode.BadRequest);
 
-            mockHandler.Protected()
-                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-                .ReturnsAsync(response);
+            SetupMockObjects(response, out Mock<IHttpClientFactory> mockFactory);
 
-            var httpClient = new HttpClient(mockHandler.Object)
-            {
-                BaseAddress = new Uri("http://localhost:5283")
-            };
+            var mockCache = new Mock<IMemoryCache>();
 
-            mockFactory.Setup(_ => _.CreateClient(It.IsAny<string>()))
-                       .Returns(httpClient);
+            var cachedResult = new RainfallModelMessage(400, new RainfallReadingResponse(), null);
 
-            var repository = new RainfallRepository(mockFactory.Object);
+            mockCache.Setup(x => x.CreateEntry(It.IsAny<object>())).Returns(Mock.Of<ICacheEntry>);
+
+            mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+                     .Returns(false);
+
+            mockCache.Object.SetCache(stationId, cachedResult, new MemoryCacheEntryOptions { SlidingExpiration = TimeSpan.FromMinutes(5) });
+
+            var repository = new RainfallRepository(mockFactory.Object, mockCache.Object);
 
             // Act
             var result = await repository.GetRainFallReadingByStationId(stationId, resultCountMax);
@@ -123,27 +140,25 @@ namespace Storted.Api.Test
         public async Task GetRainFallReadingByStationId_InternalServerError()
         {
             // Arrange
-            var mockFactory = new Mock<IHttpClientFactory>();
-            var mockHandler = new Mock<HttpMessageHandler>();
-
             var stationId = "123";
             var resultCountMax = 10;
 
             var response = new HttpResponseMessage(HttpStatusCode.InternalServerError);
 
-            mockHandler.Protected()
-                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
-                .ReturnsAsync(response);
+            SetupMockObjects(response, out Mock<IHttpClientFactory> mockFactory);
 
-            var httpClient = new HttpClient(mockHandler.Object)
-            {
-                BaseAddress = new Uri("http://localhost:5283")
-            };
+            var mockCache = new Mock<IMemoryCache>();
 
-            mockFactory.Setup(_ => _.CreateClient(It.IsAny<string>()))
-                       .Returns(httpClient);
+            var cachedResult = new RainfallModelMessage(500, new RainfallReadingResponse(), null);
 
-            var repository = new RainfallRepository(mockFactory.Object);
+            mockCache.Setup(x => x.CreateEntry(It.IsAny<object>())).Returns(Mock.Of<ICacheEntry>);
+
+            mockCache.Setup(x => x.TryGetValue(It.IsAny<object>(), out It.Ref<object>.IsAny))
+                     .Returns(false);
+
+            mockCache.Object.SetCache(stationId, cachedResult, new MemoryCacheEntryOptions { SlidingExpiration = TimeSpan.FromMinutes(5) });
+
+            var repository = new RainfallRepository(mockFactory.Object, mockCache.Object);
 
             // Act
             var result = await repository.GetRainFallReadingByStationId(stationId, resultCountMax);

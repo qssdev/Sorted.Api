@@ -1,4 +1,5 @@
-﻿using Sorted.Api.Interfaces;
+﻿using Microsoft.Extensions.Caching.Memory;
+using Sorted.Api.Interfaces;
 using Sorted.Api.Models;
 using System.Net;
 using System.Text.Json;
@@ -11,14 +12,16 @@ namespace Sorted.Api.Repositories
     public class RainfallRepository : IRainfallRepository
     {
         private readonly IHttpClientFactory _httpClientFactory;
-
+        private readonly IMemoryCache _cache;
         /// <summary>
         /// 
         /// </summary>
         /// <param name="httpClientFactory"></param>
-        public RainfallRepository(IHttpClientFactory httpClientFactory)
+        /// <param name="cache"></param>
+        public RainfallRepository(IHttpClientFactory httpClientFactory, IMemoryCache cache)
         {
             _httpClientFactory = httpClientFactory;
+            _cache = cache;
         }
         /// <summary>
         /// Request for rain fall reading on a specific station Id
@@ -28,6 +31,16 @@ namespace Sorted.Api.Repositories
         /// <returns>A list of rainfall information based on station id</returns>
         public async Task<RainfallModelMessage> GetRainFallReadingByStationId(string stationId, int? resultCountMax = 0)
         {
+
+            if (_cache.TryGetValue(stationId, out RainfallModelMessage cacheResult))
+            {
+                if(cacheResult.StatusCode != StatusCodes.Status200OK) 
+                {
+                    return new RainfallModelMessage((int)cacheResult.StatusCode, null, cacheResult.Error);
+                }
+                return cacheResult;
+            }
+
             var client = _httpClientFactory.CreateClient();
 
             string apiUrl = $"https://environment.data.gov.uk/flood-monitoring/id/stations/{stationId}/readings?_sorted&_limit={resultCountMax}";
@@ -42,13 +55,20 @@ namespace Sorted.Api.Repositories
 
                 if (readings?.Readings?.Count <= 0)
                 {
-                    return new RainfallModelMessage((int)HttpStatusCode.NotFound, null, new ErrorResponse
+                    var notFoundResponse = new RainfallModelMessage((int)HttpStatusCode.NotFound, null, new ErrorResponse
                     {
                         Message = "No readings found for the specified stationId."
                     });
+
+                    _cache.Set(stationId, notFoundResponse, TimeSpan.FromMinutes(5));
+                    return notFoundResponse;
                 }
 
-                return new RainfallModelMessage((int)HttpStatusCode.OK, readings, null);
+                var successResponse = new RainfallModelMessage((int)HttpStatusCode.OK, readings, null);
+                
+                _cache.Set(stationId, successResponse, TimeSpan.FromMinutes(5));
+                
+                return successResponse;
             }
             else
             {
@@ -84,7 +104,11 @@ namespace Sorted.Api.Repositories
                         };
                         break;
                 }
-                return new RainfallModelMessage((int)response.StatusCode, null, errorResponse);
+
+                var errorResponseMessage = new RainfallModelMessage((int)response.StatusCode, null, errorResponse);
+
+                _cache.Set(stationId, errorResponseMessage, TimeSpan.FromMinutes(5));
+                return errorResponseMessage;
             }
         }
     }
